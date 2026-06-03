@@ -1,4 +1,16 @@
 #!/bin/bash
+
+# 1. خلق المجلد والملفات الفارغة باش ffmpeg ما يبكيش
+mkdir -p /tmp/live
+echo "00:00:00" > /tmp/live/time.txt
+echo "0" > /tmp/live/subs.txt  
+echo "LIVE" > /tmp/live/status.txt
+echo "🎯 الهدف: 5000" > /tmp/live/goal.txt
+echo "0%" > /tmp/live/percent.txt
+echo "باقي 5000" > /tmp/live/remain.txt
+echo "░░░░░░░░░░░░░░░░░░░░" > /tmp/live/bar.txt
+echo "جاري التحميل..." > /tmp/live/news.txt
+
 set -e
 set -o pipefail
 export LC_ALL=C.UTF-8
