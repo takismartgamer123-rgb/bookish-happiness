@@ -17,7 +17,6 @@ echo "نشعلو سيرفر وهمي على Port $PORT باه Render ما يقت
 python3 -m http.server "${PORT:-10000}" &
 
 FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_EMOJI="/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
 START_TIME=$(date +%s)
 echo "$START_TIME" > /tmp/live/start_time.txt
 
