@@ -267,13 +267,39 @@ update_data() {
             echo "$GOAL" > "$GOAL_FILE"
             echo "🎉 مبروك! الهدف الجديد: $GOAL" > /tmp/live/news.txt
         fi
-        PERCENT=$(( SUBS * 100 / GOAL ))
-        REMAIN=$(( GOAL - SUBS ))
-        [ "$PERCENT" -gt 99 ] && PERCENT=99 && REMAIN=1
-        echo "🎯 الهدف: $GOAL" > /tmp/live/goal.txt
-        printf '█%.0s' $(seq 1 $((PERCENT/5))) > /tmp/live/bar.txt
-        printf '░%.0s' $(seq 1 $((20 - PERCENT/5)))) >> /tmp/live/bar.txt
-        echo "$PERCENT%" > /tmp/live/percent.txt
+        # 4. الهدف المتحرك
+GOAL_FILE="/tmp/live/goal_value.txt"
+[ ! -f "$GOAL_FILE" ] && echo "5000" > "$GOAL_FILE"
+GOAL=$(cat "$GOAL_FILE")
+SUBS=$(cat /tmp/live/subs.txt 2>/dev/null)
+
+# نحميو الكود من المتغيرات الفارغة
+SUBS=${SUBS:-0}
+GOAL=${GOAL:-1}
+
+if [ "$SUBS" -ge "$GOAL" ]; then
+    GOAL=$(( GOAL * 2 ))
+    echo "$GOAL" > "$GOAL_FILE"
+    echo "🎉 مبروك! الهدف الجديد: $GOAL" > /tmp/live/news.txt
+fi
+
+PERCENT=$(( SUBS * 100 / GOAL ))
+[ "$PERCENT" -lt 0 ] && PERCENT=0
+[ "$PERCENT" -gt 100 ] && PERCENT=100
+
+REMAIN=$(( GOAL - SUBS ))
+[ "$PERCENT" -gt 99 ] && PERCENT=99 && REMAIN=1
+
+echo "🎯 الهدف: $GOAL" > /tmp/live/goal.txt
+
+# نرسمو البار تاع التقدم - هذا هو لي كان مكسر
+BAR_FILLED=$((PERCENT / 5))
+BAR_EMPTY=$((20 - BAR_FILLED))
+printf '█%.0s' $(seq 1 $BAR_FILLED) 2>/dev/null > /tmp/live/bar.txt
+printf '░%.0s' $(seq 1 $BAR_EMPTY) 2>/dev/null >> /tmp/live/bar.txt
+
+echo "$PERCENT%" > /tmp/live/percent.txt
+echo "باقي $REMAIN" > /tmp/live/remain.txt
         echo "باقي $REMAIN" > /tmp/live/remain.txt
 
         # 5. الأخبار والتحفيز
