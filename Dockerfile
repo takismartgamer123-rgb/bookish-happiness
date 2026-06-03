@@ -11,7 +11,10 @@ RUN apk add --no-cache \
     python3
 
 WORKDIR /app
-COPY start.sh video.mp4 logo.png./
+
+# السطر هذا كان غالط عندك - ناقصة مسافة
+COPY start.sh video.mp4 logo.png ./
+
 RUN chmod +x start.sh
 
 CMD ["./start.sh"]
