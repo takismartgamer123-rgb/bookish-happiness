@@ -1,30 +1,28 @@
 #!/bin/bash
 set -e
+set -o pipefail
+export LC_ALL=C.UTF-8
+export TZ=Africa/Algiers
 mkdir -p /tmp/live
 
-# === الترقيع تاع Render Web Service المجاني ===
-# سيرفر وهمي باه Render ما يقتلش البث
-python3 -m http.server ${PORT:-10000} &
+FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_EMOJI="/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
+START_TIME=$(date +%s)
+echo "$START_TIME" > /tmp/live/start_time.txt
 
-FONT="/usr/share/fonts/ttf-dejavu/DejaVuSans-Bold.ttf"
-FONT_EMOJI="/usr/share/fonts/noto/NotoColorEmoji.ttf"
-
-# 1. جيب الاسم واللوجو مرة وحدة عند بداية البث
 echo "نجبدو الاسم واللوجو من يوتيوب..."
-API_STATIC=$(curl -s "https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}")
-if [ $? -eq 0 ] && [ "$(echo "$API_STATIC" | jq -r '.items | length')" -gt 0 ]; then
+API_STATIC=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}" || echo "")
+if [ -n "$API_STATIC" ] && [ "$(echo "$API_STATIC" | jq -r '.items | length')" -gt 0 ]; then
     LOGO_URL=$(echo "$API_STATIC" | jq -r '.items[0].snippet.thumbnails.high.url')
-    curl -s "$LOGO_URL" -o /tmp/live/logo.png
+    curl -s --fail --max-time 10 "$LOGO_URL" -o /tmp/live/logo.png || touch /tmp/live/logo.png
     echo "تم جلب اللوجو"
 else
-    cp logo.png /tmp/live/logo.png
+    cp logo.png /tmp/live/logo.png 2>/dev/null || touch /tmp/live/logo.png
 fi
 
-# نثبتو الاسم تاعك بالقوة
 echo "ɪʈʂ ʈɑkɪ!! 🇩🇿²⁴" > /tmp/live/channel_name.txt
 
 update_data() {
-    # 50 خبر DZ مضحك
     NEWS=(
         "عاجل: مواطن لقى 50 دج في سروال قديم، راه يخمم يشري بيها قناة يوتيوب"
         "دراسة: 90% من الجزائريين يديرو لايك قبل ما يتفرجو في الفيديو"
@@ -38,7 +36,7 @@ update_data() {
         "دراسة جديدة: الشارجور هو اكثر حاجة تتسرق في الدار"
         "مواطن طلب من الذكاء الاصطناعي يكتبله تعبير، جاه فيه 'دير لايك'"
         "عاجل: قط هرب من الدار كي سمع مولاه يغني في البث"
-        "واحد بدل اسم ولدو لـ 'Subscribe' باه يجيب مشتركين"
+        "واحد بدل اسم ولدو لـ 'subscribe' باه يجيب مشتركين"
         "خبير تغذية: الكسكسي باللايكات يزيد في الطاقة"
         "عاجل: بطارية تلفون طاحت لـ 1%، الشعب في حالة طوارئ"
         "مواطن دار عرس ونسى يعرض الانترنت، العرس فشل"
@@ -77,8 +75,6 @@ update_data() {
         "عاجل: الشمس غابت، الشعب قال 'كون غير تطلع في البث'"
         "واحد كتب في السيفي: خبرة 10 سنين في مشاهدة البثوث"
     )
-
-    # 50 جرعة تحفيز
     MOTIV=(
         "ما تستناش الوقت المناسب، دير لايك ضرك"
         "النجاح يبدا بضغطة على زر الاشتراك"
@@ -131,8 +127,6 @@ update_data() {
         "الحلم الكبير يبدا بلايك صغير"
         "ما تحبسش حتى يولي اسمك يرن"
     )
-
-    # 50 لغز مع الاجابة
     RIDDLES=(
         "ما هو الشيء الذي كلما زاد نقص؟ | العمر"
         "شيء يمشي بلا رجلين ويبكي بلا عينين؟ | السحاب"
@@ -185,61 +179,113 @@ update_data() {
         "ما هو الشيء الذي لا تحب ان تلبسه واذا لبسته لا تراه؟ | الكفن"
         "شيء يرفع اثقال ولا يقدر يرفع مسمار؟ | البحر"
     )
+    ADHKAR=(
+        "سبحان الله وبحمده"
+        "لا إله إلا الله وحده لا شريك له"
+        "استغفر الله العظيم"
+        "اللهم صل على محمد"
+        "لا حول ولا قوة إلا بالله"
+    )
 
     LAST_STATS_FETCH=0
     RIDDLE_START_TIME=0
     RIDDLE_INDEX=0
+    LAST_SUBS=0
+    echo "0" > /tmp/live/subs_today.txt
+    echo "" > /tmp/live/dhikr.txt
 
     while true; do
         CURRENT_TIME=$(date +%s)
 
-        # 2. جيب المشتركين والمشاهدات كل 60 ثانية فقط
+        # 1. احصائيات القناة كل دقيقة
         if [ $((CURRENT_TIME - LAST_STATS_FETCH)) -ge 60 ]; then
-            API_STATS=$(curl -s "https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}")
-            if [ $? -eq 0 ] && [ "$(echo "$API_STATS" | jq -r '.items | length')" -gt 0 ]; then
-                echo "$API_STATS" | jq -r '.items[0].statistics.subscriberCount' > /tmp/live/subs.txt
-                echo "$API_STATS" | jq -r '.items[0].statistics.viewCount' > /tmp/live/views.txt
+            API_STATS=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}" || echo "")
+            if [ -n "$API_STATS" ] && [ "$(echo "$API_STATS" | jq -r '.items | length')" -gt 0 ]; then
+                SUBS=$(echo "$API_STATS" | jq -r '.items[0].statistics.subscriberCount // "0"')
+                echo "$SUBS" > /tmp/live/subs.txt
+                echo "$API_STATS" | jq -r '.items[0].statistics.viewCount // "0"' > /tmp/live/views.txt
+
+                [ $LAST_SUBS -eq 0 ] && LAST_SUBS=$SUBS
+                SUBS_TODAY=$((SUBS - LAST_SUBS))
+                [ $SUBS_TODAY -lt 0 ] && SUBS_TODAY=0
+                echo "🔥 اليوم: +$SUBS_TODAY" > /tmp/live/subs_today.txt
+
+                HOUR_DZ=$(TZ=Africa/Algiers date +%H)
+                MIN_DZ=$(TZ=Africa/Algiers date +%M)
+                [ "$HOUR_DZ" = "00" ] && [ "$MIN_DZ" = "00" ] && LAST_SUBS=$SUBS
+
                 LAST_STATS_FETCH=$CURRENT_TIME
             fi
         fi
 
-        [! -f /tmp/live/subs.txt ] && echo "1234" > /tmp/live/subs.txt
-        [! -f /tmp/live/views.txt ] && echo "45678" > /tmp/live/views.txt
-        echo "$(TZ=Africa/Algiers date +%H:%M:%S)" > /tmp/live/time.txt
+        # 2. المشاهدين واللايكات
+        if [ -n "${LIVE_VIDEO_ID}" ]; then
+            LIVE_STATS=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,statistics&id=${LIVE_VIDEO_ID}&key=${YOUTUBE_API_KEY}" || echo "")
+            VIEWERS=$(echo "$LIVE_STATS" | jq -r '.items[0].liveStreamingDetails.concurrentViewers // "0"')
+            LIKES=$(echo "$LIVE_STATS" | jq -r '.items[0].statistics.likeCount // "0"')
+            echo "👀 $VIEWERS" > /tmp/live/viewers.txt
+            echo "👍 $LIKES" > /tmp/live/likes.txt
+        fi
 
-        GOAL=5000
+        [! -f /tmp/live/subs.txt ] && echo "0" > /tmp/live/subs.txt
+        [! -f /tmp/live/views.txt ] && echo "0" > /tmp/live/views.txt
+        [! -f /tmp/live/viewers.txt ] && echo "👀 0" > /tmp/live/viewers.txt
+        [! -f /tmp/live/likes.txt ] && echo "👍 0" > /tmp/live/likes.txt
+
+        # 3. الوقت و Uptime
+        echo "$(TZ=Africa/Algiers date +%H:%M:%S)" > /tmp/live/time.txt
+        UPTIME=$(( CURRENT_TIME - START_TIME ))
+        HOURS=$(( UPTIME / 3600 ))
+        MINUTES=$(( (UPTIME % 3600) / 60 ))
+        printf "⏰ شاعل: %02d:%02d" $HOURS $MINUTES > /tmp/live/uptime.txt
+
+        # 4. الهدف المتحرك
+        GOAL_FILE="/tmp/live/goal_value.txt"
+        [! -f "$GOAL_FILE" ] && echo "5000" > "$GOAL_FILE"
+        GOAL=$(cat "$GOAL_FILE")
         SUBS=$(cat /tmp/live/subs.txt)
+        if [ "$SUBS" -ge "$GOAL" ]; then
+            GOAL=$(( GOAL * 2 ))
+            echo "$GOAL" > "$GOAL_FILE"
+            echo "🎉 مبروك! الهدف الجديد: $GOAL" > /tmp/live/news.txt
+        fi
         PERCENT=$(( SUBS * 100 / GOAL ))
         REMAIN=$(( GOAL - SUBS ))
-        if [ $PERCENT -gt 100 ]; then PERCENT=100; REMAIN=0; fi
+        [ $PERCENT -gt 99 ] && PERCENT=99 && REMAIN=1
         echo "🎯 الهدف: $GOAL" > /tmp/live/goal.txt
         printf '█%.0s' $(seq 1 $((PERCENT/5))) > /tmp/live/bar.txt
         printf '░%.0s' $(seq 1 $((20 - PERCENT/5))) >> /tmp/live/bar.txt
         echo "$PERCENT%" > /tmp/live/percent.txt
-        echo "باقي $REMAIN للهدف" > /tmp/live/remain.txt
+        echo "باقي $REMAIN" > /tmp/live/remain.txt
 
-        PICK=$(( $(date +%s) / 60 % 50 ))
+        # 5. الأخبار والتحفيز
+        PICK=$(( CURRENT_TIME / 60 % 50 ))
         echo "${NEWS[$PICK]}" | fold -s -w 35 > /tmp/live/news.txt
-
-        PICK2=$(( $(date +%s) / 120 % 50 ))
+        PICK2=$(( CURRENT_TIME / 120 % 50 ))
         echo "💪 جرعة تحفيز:" > /tmp/live/motiv1.txt
         echo "${MOTIV[$PICK2]}" > /tmp/live/motiv2.txt
 
-        # === النسخة النووية تاع الألغاز: مؤقت + إخفاء الجواب ===
+        # 6. الأذكار كل ساعة
+        if [ $((CURRENT_TIME % 3600)) -lt 30 ]; then
+            PICK_DHIKR=$(( RANDOM % 5 ))
+            echo "🕌 ${ADHKAR[$PICK_DHIKR]}" > /tmp/live/dhikr.txt
+        else
+            echo "" > /tmp/live/dhikr.txt
+        fi
+
+        # 7. الألغاز
         if [ $((CURRENT_TIME - RIDDLE_START_TIME)) -ge 180 ]; then
             RIDDLE_INDEX=$(( RANDOM % 50 ))
             RIDDLE_START_TIME=$CURRENT_TIME
         fi
-
         FULL_RIDDLE="${RIDDLES[$RIDDLE_INDEX]}"
         TIME_PASSED=$((CURRENT_TIME - RIDDLE_START_TIME))
-
         if [ $TIME_PASSED -lt 120 ]; then
             QUESTION_ONLY=$(echo "$FULL_RIDDLE" | cut -d'|' -f1)
             TIME_LEFT=$((120 - TIME_PASSED))
-            echo "🧠 لغز تاكي: $QUESTION_ONLY | جاوب ضرك ⏰ $TIME_LEFT ثا" > /tmp/live/riddle.txt
+            echo "🧠 لغز: $QUESTION_ONLY | ⏰ $TIME_LEFT ثا" > /tmp/live/riddle.txt
         else
-            echo "🧠 لغز تاكي: $FULL_RIDDLE | ✅ الجواب ظهر!" > /tmp/live/riddle.txt
+            echo "🧠 لغز: $FULL_RIDDLE | ✅" > /tmp/live/riddle.txt
         fi
 
         sleep 15
@@ -247,7 +293,9 @@ update_data() {
 }
 
 update_data &
-trap 'echo "ffmpeg مات. نعاودو..." && sleep 10' ERR
+
+trap 'echo "⚠️ ffmpeg طاح $(TZ=Africa/Algiers date)" >> /tmp/live/logs.txt && sleep 10' ERR
+
 CHANNEL_NAME=$(cat /tmp/live/channel_name.txt)
 
 while true; do
@@ -259,43 +307,47 @@ while true; do
     [bg][1:v]overlay=main_w-overlay_w-40:40[ol]; \
     [ol]drawbox=x=0:y=0:w=1280:h=60:color=#6a0dad@0.95:t=fill[topbar]; \
     [topbar]drawtext=fontfile=$FONT_EMOJI:text='🟢':fontsize=36:x=40:y=12[green]; \
-    [green]drawtext=fontfile=$FONT:text=' LIVE بث ':fontcolor=white:fontsize=36:x=85:y=12[live1]; \
+    [green]drawtext=fontfile=$FONT:text=' live بث ':fontcolor=white:fontsize=36:x=85:y=12[live1]; \
     [live1]drawtext=fontfile=$FONT:text='$CHANNEL_NAME':fontcolor=white:fontsize=36:x=280:y=12[name]; \
     [name]drawtext=fontfile=$FONT:text=' الرسمي 24/7':fontcolor=white:fontsize=36:x=620:y=12; \
-    drawtext=fontfile=$FONT:textfile=/tmp/live/time.txt:reload=1:fontcolor=white:fontsize=36:x=w-text_w-40:y=12[header]; \
+    drawtext=fontfile=$FONT:textfile=/tmp/live/time.txt:reload=1:fontcolor=white:fontsize=36:x=w-text_w-40:y=12; \
+    drawtext=fontfile=$FONT:textfile=/tmp/live/uptime.txt:reload=1:fontcolor=#aaaaaa:fontsize=24:x=w-text_w-40:y=40[header]; \
     [header]drawbox=x=0:y=60:w=640:h=600:color=#1a1a1a@0.85:t=fill[leftbox]; \
     [leftbox]drawtext=fontfile=$FONT_EMOJI:text='📊':fontsize=32:x=40:y=80[chart]; \
     [chart]drawtext=fontfile=$FONT:text=' احصائيات القناة':fontcolor=#00ffff:fontsize=32:x=85:y=80[st]; \
     [st]drawtext=fontfile=$FONT:text='$CHANNEL_NAME':fontcolor=white:fontsize=48:x=(640-text_w)/2:y=140[name2]; \
     [name2]drawtext=fontfile=$FONT:text='المشتركين':fontcolor=#aaaaaa:fontsize=28:x=(640-text_w)/2:y=220[subtxt]; \
     [subtxt]drawtext=fontfile=$FONT:textfile=/tmp/live/subs.txt:reload=1:fontcolor=#00ff00:fontsize=60:x=(640-text_w)/2:y=260; \
-    drawbox=x=40:y=350:w=560:h=2:color=white@0.3:t=fill; \
-    drawtext=fontfile=$FONT:textfile=/tmp/live/goal.txt:reload=1:fontcolor=yellow:fontsize=30:x=40:y=370[goal]; \
-    [goal]drawtext=fontfile=$FONT:textfile=/tmp/live/bar.txt:reload=1:fontcolor=#00ff00:fontsize=28:x=40:y=410:line_spacing=0; \
-    drawtext=fontfile=$FONT:textfile=/tmp/live/percent.txt:reload=1:fontcolor=white:fontsize=32:x=520:y=405; \
-    drawtext=fontfile=$FONT:textfile=/tmp/live/remain.txt:reload=1:fontcolor=#ff9900:fontsize=24:x=40:y=450[rem]; \
-    [rem]drawtext=fontfile=$FONT_EMOJI:text='👁️':fontsize=28:x=40:y=510[eye]; \
-    [eye]drawtext=fontfile=$FONT:textfile=/tmp/live/views.txt:reload=1:fontcolor=white:fontsize=32:x=80:y=508[views]; \
-    [views]drawtext=fontfile=$FONT:text='مشاهدة':fontcolor=#aaaaaa:fontsize=24:x=220:y=512[viewtxt]; \
-    [viewtxt]drawbox=x=640:y=60:w=640:h=600:color=#0d0d0d@0.85:t=fill[rightbox]; \
+    drawtext=fontfile=$FONT:textfile=/tmp/live/subs_today.txt:reload=1:fontcolor=#ff9900:fontsize=28:x=(640-text_w)/2:y=330[today]; \
+    [today]drawbox=x=40:y=380:w=560:h=2:color=white@0.3:t=fill; \
+    drawtext=fontfile=$FONT:textfile=/tmp/live/goal.txt:reload=1:fontcolor=yellow:fontsize=30:x=40:y=400[goal]; \
+    [goal]drawtext=fontfile=$FONT:textfile=/tmp/live/bar.txt:reload=1:fontcolor=#00ff00:fontsize=28:x=40:y=440:line_spacing=0; \
+    drawtext=fontfile=$FONT:textfile=/tmp/live/percent.txt:reload=1:fontcolor=white:fontsize=32:x=520:y=435; \
+    drawtext=fontfile=$FONT:textfile=/tmp/live/remain.txt:reload=1:fontcolor=#ff9900:fontsize=24:x=40:y=480[rem]; \
+    [rem]drawtext=fontfile=$FONT_EMOJI:text='👁️':fontsize=28:x=40:y=520[eye]; \
+    [eye]drawtext=fontfile=$FONT:textfile=/tmp/live/views.txt:reload=1:fontcolor=white:fontsize=32:x=80:y=518[views]; \
+    [views]drawtext=fontfile=$FONT:textfile=/tmp/live/viewers.txt:reload=1:fontcolor=#00ffff:fontsize=28:x=300:y=520; \
+    drawtext=fontfile=$FONT:textfile=/tmp/live/likes.txt:reload=1:fontcolor=#ff66ff:fontsize=28:x=450:y=520[stats]; \
+    [stats]drawbox=x=640:y=60:w=640:h=600:color=#0d0d0d@0.85:t=fill[rightbox]; \
     [rightbox]drawtext=fontfile=$FONT_EMOJI:text='📰':fontsize=32:x=680:y=80; \
-    drawtext=fontfile=$FONT:text=' اخبار DZ المضحكة':fontcolor=#ff6600:fontsize=32:x=725:y=80[nt]; \
-    [nt]drawbox=x=660:y=130:w=600:h=200:color=#2a2a2a@0.9:t=fill[newsbg]; \
-    [newsbg]drawtext=fontfile=$FONT:textfile=/tmp/live/news.txt:reload=1:fontcolor=white:fontsize=26:x=680:y=150:line_spacing=8[newstxt]; \
-    [newstxt]drawtext=fontfile=$FONT:textfile=/tmp/live/motiv1.txt:reload=1:fontcolor=#ff00ff:fontsize=30:x=680:y=360[m1]; \
-    [m1]drawtext=fontfile=$FONT:textfile=/tmp/live/motiv2.txt:reload=1:fontcolor=white:fontsize=26:x=680:y=400:w=580:fix_bounds=1[m2]; \
-    [m2]drawtext=fontfile=$FONT:text='دير لايك 😂 | كومنت 🔥':fontcolor=#00ffff:fontsize=28:x=680:y=500[cta]; \
+    drawtext=fontfile=$FONT:text=' اخبار dz المضحكة':fontcolor=#ff6600:fontsize=32:x=725:y=80[nt]; \
+    [nt]drawbox=x=660:y=130:w=600:h=180:color=#2a2a2a@0.9:t=fill[newsbg]; \
+    [newsbg]drawtext=fontfile=$FONT:textfile=/tmp/live/news.txt:reload=1:fontcolor=white:fontsize=26:x=680:y=145:line_spacing=8[newstxt]; \
+    [newstxt]drawtext=fontfile=$FONT:textfile=/tmp/live/motiv1.txt:reload=1:fontcolor=#ff00ff:fontsize=30:x=680:y=330[m1]; \
+    [m1]drawtext=fontfile=$FONT:textfile=/tmp/live/motiv2.txt:reload=1:fontcolor=white:fontsize=26:x=680:y=370:w=580:fix_bounds=1[m2]; \
+    [m2]drawtext=fontfile=$FONT:textfile=/tmp/live/dhikr.txt:reload=1:fontcolor=#00ff00:fontsize=28:x=680:y=450:alpha='if(gt(st(0\,t)\,0),1,0)'[dhikr]; \
+    [dhikr]drawtext=fontfile=$FONT:text='دير لايك 😂 | كومنت 🔥 | اشتراك ❤️':fontcolor=#00ffff:fontsize=28:x=680:y=500[cta]; \
     [cta]drawbox=x=0:y=660:w=1280:h=60:color=#6a0dad@0.95:t=fill[botbar]; \
     [botbar]drawtext=fontfile=$FONT:textfile=/tmp/live/riddle.txt:reload=1:fontcolor=white:fontsize=24:x=40:y=678:w=1200:fix_bounds=1[vo]; \
     [2:a]volume=0.0[ao]" \
     -map "[vo]" -map "[ao]" \
     -c:v libx264 -preset ultrafast -tune zerolatency -threads 1 \
-    -pix_fmt yuv420p -colorspace bt709 \
-    -b:v 2500k -maxrate 2500k -bufsize 5000k \
+    -pix_fmt yuv420p \
+    -b:v 1500k -maxrate 1500k -bufsize 3000k \
     -r 30 -g 60 -keyint_min 60 -sc_threshold 0 \
     -fflags +genpts+igndts -use_wallclock_as_timestamps 1 -flags low_delay \
     -c:a aac -b:a 96k -ar 44100 \
-    -f flv "rtmp://a.rtmp.youtube.com/live2/${YOUTUBE_STREAM_KEY}"
+    -f flv "rtmp://a.rtmp.youtube.com/live2/${YOUTUBE_STREAM_KEY}" || true
 
     sleep 10
 done
