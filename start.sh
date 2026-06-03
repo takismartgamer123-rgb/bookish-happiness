@@ -3,11 +3,18 @@ set -e
 set -o pipefail
 export LC_ALL=C.UTF-8
 export TZ=Africa/Algiers
+
+# Verify required environment variables
+if [ -z "$CHANNEL_ID" ] || [ -z "$YOUTUBE_API_KEY" ]; then
+    echo "Error: CHANNEL_ID and YOUTUBE_API_KEY environment variables must be set"
+    exit 1
+fi
+
 mkdir -p /tmp/live
 
 # === الترقيع تاع Render Web Service المجاني ===
 echo "نشعلو سيرفر وهمي على Port $PORT باه Render ما يقتلش البث"
-python3 -m http.server ${PORT:-10000} &
+python3 -m http.server "${PORT:-10000}" &
 
 FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_EMOJI="/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
@@ -15,11 +22,15 @@ START_TIME=$(date +%s)
 echo "$START_TIME" > /tmp/live/start_time.txt
 
 echo "نجبدو الاسم واللوجو من يوتيوب..."
-API_STATIC=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}" || echo "")
-if [ -n "$API_STATIC" ] && [ "$(echo "$API_STATIC" | jq -r '.items | length')" -gt 0 ]; then
-    LOGO_URL=$(echo "$API_STATIC" | jq -r '.items[0].snippet.thumbnails.high.url')
-    curl -s --fail --max-time 10 "$LOGO_URL" -o /tmp/live/logo.png || touch /tmp/live/logo.png
-    echo "تم جلب اللوجو"
+API_STATIC=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}" 2>/dev/null || echo "")
+if [ -n "$API_STATIC" ] && [ "$(echo "$API_STATIC" | jq -r '.items | length' 2>/dev/null)" -gt 0 ]; then
+    LOGO_URL=$(echo "$API_STATIC" | jq -r '.items[0].snippet.thumbnails.high.url' 2>/dev/null)
+    if [ -n "$LOGO_URL" ] && [ "$LOGO_URL" != "null" ]; then
+        curl -s --fail --max-time 10 "$LOGO_URL" -o /tmp/live/logo.png 2>/dev/null || touch /tmp/live/logo.png
+        echo "تم جلب اللوجو"
+    else
+        cp logo.png /tmp/live/logo.png 2>/dev/null || touch /tmp/live/logo.png
+    fi
 else
     cp logo.png /tmp/live/logo.png 2>/dev/null || touch /tmp/live/logo.png
 fi
@@ -203,20 +214,22 @@ update_data() {
 
         # 1. احصائيات القناة كل دقيقة
         if [ $((CURRENT_TIME - LAST_STATS_FETCH)) -ge 60 ]; then
-            API_STATS=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}" || echo "")
-            if [ -n "$API_STATS" ] && [ "$(echo "$API_STATS" | jq -r '.items | length')" -gt 0 ]; then
-                SUBS=$(echo "$API_STATS" | jq -r '.items[0].statistics.subscriberCount // "0"')
+            API_STATS=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}" 2>/dev/null || echo "")
+            if [ -n "$API_STATS" ] && [ "$(echo "$API_STATS" | jq -r '.items | length' 2>/dev/null)" -gt 0 ]; then
+                SUBS=$(echo "$API_STATS" | jq -r '.items[0].statistics.subscriberCount // "0"' 2>/dev/null)
                 echo "$SUBS" > /tmp/live/subs.txt
-                echo "$API_STATS" | jq -r '.items[0].statistics.viewCount // "0"' > /tmp/live/views.txt
+                echo "$API_STATS" | jq -r '.items[0].statistics.viewCount // "0"' 2>/dev/null > /tmp/live/views.txt
 
-                [ $LAST_SUBS -eq 0 ] && LAST_SUBS=$SUBS
+                [ "$LAST_SUBS" -eq 0 ] && LAST_SUBS="$SUBS"
                 SUBS_TODAY=$((SUBS - LAST_SUBS))
-                [ $SUBS_TODAY -lt 0 ] && SUBS_TODAY=0
+                [ "$SUBS_TODAY" -lt 0 ] && SUBS_TODAY=0
                 echo "🔥 اليوم: +$SUBS_TODAY" > /tmp/live/subs_today.txt
 
                 HOUR_DZ=$(TZ=Africa/Algiers date +%H)
                 MIN_DZ=$(TZ=Africa/Algiers date +%M)
-                [ "$HOUR_DZ" = "00" ] && [ "$MIN_DZ" = "00" ] && LAST_SUBS=$SUBS
+                if [ "$HOUR_DZ" = "00" ] && [ "$MIN_DZ" = "00" ]; then
+                    LAST_SUBS="$SUBS"
+                fi
 
                 LAST_STATS_FETCH=$CURRENT_TIME
             fi
@@ -224,28 +237,29 @@ update_data() {
 
         # 2. المشاهدين واللايكات
         if [ -n "${LIVE_VIDEO_ID}" ]; then
-            LIVE_STATS=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,statistics&id=${LIVE_VIDEO_ID}&key=${YOUTUBE_API_KEY}" || echo "")
-            VIEWERS=$(echo "$LIVE_STATS" | jq -r '.items[0].liveStreamingDetails.concurrentViewers // "0"')
-            LIKES=$(echo "$LIVE_STATS" | jq -r '.items[0].statistics.likeCount // "0"')
+            LIVE_STATS=$(curl -s --fail --max-time 10 "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,statistics&id=${LIVE_VIDEO_ID}&key=${YOUTUBE_API_KEY}" 2>/dev/null || echo "")
+            VIEWERS=$(echo "$LIVE_STATS" | jq -r '.items[0].liveStreamingDetails.concurrentViewers // "0"' 2>/dev/null)
+            LIKES=$(echo "$LIVE_STATS" | jq -r '.items[0].statistics.likeCount // "0"' 2>/dev/null)
             echo "👀 $VIEWERS" > /tmp/live/viewers.txt
             echo "👍 $LIKES" > /tmp/live/likes.txt
         fi
 
-        [! -f /tmp/live/subs.txt ] && echo "0" > /tmp/live/subs.txt
-        [! -f /tmp/live/views.txt ] && echo "0" > /tmp/live/views.txt
-        [! -f /tmp/live/viewers.txt ] && echo "👀 0" > /tmp/live/viewers.txt
-        [! -f /tmp/live/likes.txt ] && echo "👍 0" > /tmp/live/likes.txt
+        # Create default files if missing
+        [ ! -f /tmp/live/subs.txt ] && echo "0" > /tmp/live/subs.txt
+        [ ! -f /tmp/live/views.txt ] && echo "0" > /tmp/live/views.txt
+        [ ! -f /tmp/live/viewers.txt ] && echo "👀 0" > /tmp/live/viewers.txt
+        [ ! -f /tmp/live/likes.txt ] && echo "👍 0" > /tmp/live/likes.txt
 
         # 3. الوقت و Uptime
         echo "$(TZ=Africa/Algiers date +%H:%M:%S)" > /tmp/live/time.txt
         UPTIME=$(( CURRENT_TIME - START_TIME ))
         HOURS=$(( UPTIME / 3600 ))
         MINUTES=$(( (UPTIME % 3600) / 60 ))
-        printf "⏰ شاعل: %02d:%02d" $HOURS $MINUTES > /tmp/live/uptime.txt
+        printf "⏰ شاعل: %02d:%02d" "$HOURS" "$MINUTES" > /tmp/live/uptime.txt
 
         # 4. الهدف المتحرك
         GOAL_FILE="/tmp/live/goal_value.txt"
-        [! -f "$GOAL_FILE" ] && echo "5000" > "$GOAL_FILE"
+        [ ! -f "$GOAL_FILE" ] && echo "5000" > "$GOAL_FILE"
         GOAL=$(cat "$GOAL_FILE")
         SUBS=$(cat /tmp/live/subs.txt)
         if [ "$SUBS" -ge "$GOAL" ]; then
@@ -255,17 +269,17 @@ update_data() {
         fi
         PERCENT=$(( SUBS * 100 / GOAL ))
         REMAIN=$(( GOAL - SUBS ))
-        [ $PERCENT -gt 99 ] && PERCENT=99 && REMAIN=1
+        [ "$PERCENT" -gt 99 ] && PERCENT=99 && REMAIN=1
         echo "🎯 الهدف: $GOAL" > /tmp/live/goal.txt
         printf '█%.0s' $(seq 1 $((PERCENT/5))) > /tmp/live/bar.txt
-        printf '░%.0s' $(seq 1 $((20 - PERCENT/5))) >> /tmp/live/bar.txt
+        printf '░%.0s' $(seq 1 $((20 - PERCENT/5)))) >> /tmp/live/bar.txt
         echo "$PERCENT%" > /tmp/live/percent.txt
         echo "باقي $REMAIN" > /tmp/live/remain.txt
 
         # 5. الأخبار والتحفيز
-        PICK=$(( CURRENT_TIME / 60 % 50 ))
+        PICK=$(( (CURRENT_TIME / 60) % 50 ))
         echo "${NEWS[$PICK]}" | fold -s -w 35 > /tmp/live/news.txt
-        PICK2=$(( CURRENT_TIME / 120 % 50 ))
+        PICK2=$(( (CURRENT_TIME / 120) % 50 ))
         echo "💪 جرعة تحفيز:" > /tmp/live/motiv1.txt
         echo "${MOTIV[$PICK2]}" > /tmp/live/motiv2.txt
 
@@ -284,7 +298,7 @@ update_data() {
         fi
         FULL_RIDDLE="${RIDDLES[$RIDDLE_INDEX]}"
         TIME_PASSED=$((CURRENT_TIME - RIDDLE_START_TIME))
-        if [ $TIME_PASSED -lt 120 ]; then
+        if [ "$TIME_PASSED" -lt 120 ]; then
             QUESTION_ONLY=$(echo "$FULL_RIDDLE" | cut -d'|' -f1)
             TIME_LEFT=$((120 - TIME_PASSED))
             echo "🧠 لغز: $QUESTION_ONLY | ⏰ $TIME_LEFT ثا" > /tmp/live/riddle.txt
@@ -297,10 +311,12 @@ update_data() {
 }
 
 update_data &
+DATA_PID=$!
 
-trap 'echo "⚠️ ffmpeg طاح $(TZ=Africa/Algiers date)" >> /tmp/live/logs.txt && sleep 10' ERR
+# Trap to handle errors and cleanup
+trap 'echo "⚠️ ffmpeg طاح $(TZ=Africa/Algiers date)" >> /tmp/live/logs.txt && kill $DATA_PID 2>/dev/null; sleep 10' ERR
 
-CHANNEL_NAME=$(cat /tmp/live/channel_name.txt)
+CHANNEL_NAME=$(cat /tmp/live/channel_name.txt 2>/dev/null || echo "Unknown")
 
 while true; do
     ffmpeg -hide_banner -loglevel warning \
