@@ -24,9 +24,8 @@ RUN fc-cache -f -v
 WORKDIR /app
 
 COPY requirements.txt .
-RUN if [ -s requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
-
 COPY start.sh /app/start.sh
+RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
 COPY video.mp4* /app/
 COPY logo.png* /app/
 
