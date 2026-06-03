@@ -6,7 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash \
     curl \
     jq \
     python3 \
@@ -25,11 +24,11 @@ RUN fc-cache -f -v
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt || true
+RUN if [ -s requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
 
 COPY start.sh /app/start.sh
-COPY video.mp4 /app/video.mp4 || true
-COPY logo.png /app/logo.png || true
+COPY video.mp4* /app/
+COPY logo.png* /app/
 
 RUN chmod +x /app/start.sh
 
