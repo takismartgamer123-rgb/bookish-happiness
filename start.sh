@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# 1. خلق المجلد والملفات الفارغة باش ffmpeg ما يبكيش
+# === اللول خلاه: خلق كل الملفات ===
 mkdir -p /tmp/live
 echo "00:00:00" > /tmp/live/time.txt
-echo "0" > /tmp/live/subs.txt  
+echo "0" > /tmp/live/subs.txt
 echo "LIVE" > /tmp/live/status.txt
 echo "🎯 الهدف: 5000" > /tmp/live/goal.txt
 echo "0%" > /tmp/live/percent.txt
 echo "باقي 5000" > /tmp/live/remain.txt
 echo "░░░░░░░░░░░░░░░░░░░░" > /tmp/live/bar.txt
-echo "جاري التحميل..." > /tmp/live/news.txt
+echo "نص تحفيزي هنا" > /tmp/live/motiv2.txt  # هذا لي كان ناقص
 
 set -e
 set -o pipefail
@@ -220,8 +220,18 @@ update_data() {
     echo "0" > /tmp/live/subs_today.txt
     echo "" > /tmp/live/dhikr.txt
 
-    while true; do
-        CURRENT_TIME=$(date +%s)
+# === من بعد الكود تاعك ===
+while true; do
+    date "+%H:%M:%S" > /tmp/live/time.txt
+    sleep 1
+done &
+
+# === سطر ffmpeg المصحح ===
+ffmpeg -re -stream_loop -1 -i /app/video.mp4 \
+-vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf: \
+     textfile=/tmp/live/motiv2.txt:reload=1:fontcolor=white:fontsize=26:x=680:y=370" \
+-c:a copy -f flv "$RTMP_URL"
+ 
 
         # 1. احصائيات القناة كل دقيقة
         if [ $((CURRENT_TIME - LAST_STATS_FETCH)) -ge 60 ]; then
