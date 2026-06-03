@@ -1,20 +1,24 @@
-FROM alpine:3.19
+FROM ubuntu:22.04
 
-RUN apk add --no-cache \
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Africa/Algiers
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    bash \
+    fonts-dejavu-core \
+    fonts-noto-color-emoji \
     curl \
     jq \
     tzdata \
-    ttf-dejavu \
-    font-noto-emoji \
-    python3
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# السطر هذا كان غالط عندك - ناقصة مسافة
-COPY start.sh video.mp4 logo.png ./
+COPY start.sh /app/start.sh
+COPY video.mp4 /app/video.mp4
+COPY logo.png /app/logo.png
 
-RUN chmod +x start.sh
+RUN chmod +x /app/start.sh
 
-CMD ["./start.sh"]
+CMD ["/app/start.sh"]
