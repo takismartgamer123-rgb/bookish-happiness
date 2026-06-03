@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 mkdir -p /tmp/live
+
+# === الترقيع تاع Render Web Service المجاني ===
+# سيرفر وهمي باه Render ما يقتلش البث
+python3 -m http.server ${PORT:-10000} &
+
 FONT="/usr/share/fonts/ttf-dejavu/DejaVuSans-Bold.ttf"
 FONT_EMOJI="/usr/share/fonts/noto/NotoColorEmoji.ttf"
 
@@ -221,7 +226,6 @@ update_data() {
         echo "${MOTIV[$PICK2]}" > /tmp/live/motiv2.txt
 
         # === النسخة النووية تاع الألغاز: مؤقت + إخفاء الجواب ===
-        # كل 180 ثانية = 3 دقايق نبدلو لغز
         if [ $((CURRENT_TIME - RIDDLE_START_TIME)) -ge 180 ]; then
             RIDDLE_INDEX=$(( RANDOM % 50 ))
             RIDDLE_START_TIME=$CURRENT_TIME
@@ -231,12 +235,10 @@ update_data() {
         TIME_PASSED=$((CURRENT_TIME - RIDDLE_START_TIME))
 
         if [ $TIME_PASSED -lt 120 ]; then
-            # أول دقيقتين: نخبي الجواب + نوريو المؤقت
             QUESTION_ONLY=$(echo "$FULL_RIDDLE" | cut -d'|' -f1)
             TIME_LEFT=$((120 - TIME_PASSED))
             echo "🧠 لغز تاكي: $QUESTION_ONLY | جاوب ضرك ⏰ $TIME_LEFT ثا" > /tmp/live/riddle.txt
         else
-            # الدقيقة الثالثة: نوريو الجواب
             echo "🧠 لغز تاكي: $FULL_RIDDLE | ✅ الجواب ظهر!" > /tmp/live/riddle.txt
         fi
 
