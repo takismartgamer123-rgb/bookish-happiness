@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    curl \
+    jq \
     python3 \
     python3-pip \
     ffmpeg \
@@ -22,12 +25,12 @@ RUN fc-cache -f -v
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt || true
 
 COPY start.sh /app/start.sh
-COPY video.mp4 /app/video.mp4
-COPY logo.png /app/logo.png
+COPY video.mp4 /app/video.mp4 || true
+COPY logo.png /app/logo.png || true
 
 RUN chmod +x /app/start.sh
 
-CMD ["/app/start.sh"]
+CMD ["/bin/bash", "/app/start.sh"]
